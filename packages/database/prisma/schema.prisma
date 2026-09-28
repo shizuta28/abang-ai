@@ -1,0 +1,376 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+enum TokenPurpose {
+  VERIFY
+  RESET
+}
+
+enum ProductType {
+  EBOOK
+  PROMPT_PACK
+  TOOLKIT
+  TEMPLATE
+  MINI_COURSE
+  WORKSHOP_RECORDING
+  BUNDLE
+  FREE_RESOURCE
+}
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+enum EntitlementStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum AccessType {
+  LIFETIME
+  FIXED_TERM
+  FREE
+}
+
+enum DiscountType {
+  PERCENT
+  FIXED
+}
+
+enum EmailType {
+  VERIFY_ACCOUNT
+  RESET_PASSWORD
+  PURCHASE_CONFIRMATION
+  RECEIPT
+  PRODUCT_ACCESS
+  FREE_RESOURCE
+}
+
+enum EmailStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+model Role {
+  id    String @id @default(cuid())
+  code  String @unique
+  name  String
+  users User[]
+}
+
+model User {
+  id                 String          @id @default(cuid())
+  email              String          @unique
+  passwordHash       String
+  roleId             String
+  role               Role            @relation(fields: [roleId], references: [id])
+  status             UserStatus      @default(PENDING)
+  emailVerifiedAt    DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  profile            Profile?
+  tokens             PasswordToken[]
+  orders             Order[]
+  entitlements       Entitlement[]
+  downloads          Download[]
+  progress           LessonProgress[]
+  savedItems         SavedItem[]
+  couponRedemptions  CouponRedemption[]
+  emailLogs          EmailLog[]
+  auditLogs          AuditLog[]
+
+  @@index([roleId, status])
+}
+
+model Profile {
+  id                 String    @id @default(cuid())
+  userId             String    @unique
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName        String
+  phone              String?
+  marketingConsentAt DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+model PasswordToken {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose   TokenPurpose
+  tokenHash String       @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime     @default(now())
+
+  @@index([userId, purpose])
+}
+
+model Product {
+  id           String            @id @default(cuid())
+  slug         String            @unique
+  name         String
+  summary      String
+  type         ProductType
+  status       ProductStatus     @default(DRAFT)
+  prices       ProductPrice[]
+  files        ProductFile[]
+  bundleItems  ProductRelation[] @relation("BundleParent")
+  includedIn   ProductRelation[] @relation("BundleChild")
+  course       Course?
+  orderItems   OrderItem[]
+  entitlements Entitlement[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([status, type])
+}
+
+model ProductPrice {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  currency  String   @default("MYR")
+  amount    Int
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([productId, active])
+}
+
+model ProductFile {
+  id        String     @id @default(cuid())
+  productId String
+  product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  filename  String
+  mimeType  String
+  bytes     Int
+  r2Key     String     @unique
+  createdAt DateTime   @default(now())
+  downloads Download[]
+}
+
+model ProductRelation {
+  parentProductId String
+  childProductId  String
+  sortOrder       Int     @default(0)
+  parent          Product @relation("BundleParent", fields: [parentProductId], references: [id], onDelete: Cascade)
+  child           Product @relation("BundleChild", fields: [childProductId], references: [id], onDelete: Cascade)
+
+  @@id([parentProductId, childProductId])
+}
+
+model Course {
+  id        String   @id @default(cuid())
+  productId String   @unique
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  title     String
+  lessons   Lesson[]
+}
+
+model Lesson {
+  id        String           @id @default(cuid())
+  courseId  String
+  course    Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title     String
+  summary   String
+  sortOrder Int
+  streamId  String?
+  progress  LessonProgress[]
+
+  @@index([courseId, sortOrder])
+}
+
+model LessonProgress {
+  id          String    @id @default(cuid())
+  userId      String
+  lessonId    String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson      Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, lessonId])
+}
+
+model Order {
+  id                String              @id @default(cuid())
+  userId            String
+  user              User                @relation(fields: [userId], references: [id])
+  status            OrderStatus         @default(PENDING)
+  currency          String              @default("MYR")
+  subtotal          Int
+  discount          Int                 @default(0)
+  total             Int
+  items             OrderItem[]
+  payments          Payment[]
+  entitlements      Entitlement[]
+  couponRedemption  CouponRedemption?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([userId, status])
+}
+
+model OrderItem {
+  id         String  @id @default(cuid())
+  orderId    String
+  productId  String
+  order      Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product    Product @relation(fields: [productId], references: [id])
+  unitAmount Int
+  quantity   Int     @default(1)
+
+  @@index([orderId])
+}
+
+model Payment {
+  id             String            @id @default(cuid())
+  orderId        String
+  order          Order             @relation(fields: [orderId], references: [id])
+  provider       String            @default("toyyibpay")
+  status         PaymentStatus     @default(PENDING)
+  amount         Int
+  billCode       String?           @unique
+  transactionRef String?
+  callbacks      PaymentCallback[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([orderId, status])
+}
+
+model PaymentCallback {
+  id          String    @id @default(cuid())
+  paymentId   String?
+  payment     Payment?  @relation(fields: [paymentId], references: [id])
+  billCode    String
+  externalRef String
+  payload     Json
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([billCode, externalRef])
+}
+
+model Entitlement {
+  id           String            @id @default(cuid())
+  userId       String
+  productId    String
+  orderId      String?
+  user         User              @relation(fields: [userId], references: [id])
+  product      Product           @relation(fields: [productId], references: [id])
+  order        Order?            @relation(fields: [orderId], references: [id])
+  accessType   AccessType
+  status       EntitlementStatus @default(ACTIVE)
+  startsAt     DateTime
+  expiresAt    DateTime?
+  revokedAt    DateTime?
+  revokeReason String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([userId, productId, status])
+}
+
+model Download {
+  id            String      @id @default(cuid())
+  userId        String
+  productFileId String
+  user          User        @relation(fields: [userId], references: [id])
+  file          ProductFile @relation(fields: [productFileId], references: [id])
+  requestedAt   DateTime    @default(now())
+
+  @@index([userId, requestedAt])
+}
+
+model Coupon {
+  id             String             @id @default(cuid())
+  code           String             @unique
+  discountType   DiscountType
+  amount         Int
+  active         Boolean            @default(true)
+  maxRedemptions Int?
+  expiresAt      DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  redemptions    CouponRedemption[]
+}
+
+model CouponRedemption {
+  id        String   @id @default(cuid())
+  couponId  String
+  userId    String
+  orderId   String   @unique
+  coupon    Coupon   @relation(fields: [couponId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+  order     Order    @relation(fields: [orderId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([couponId])
+}
+
+model SavedItem {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  strapiDocumentId String
+  createdAt        DateTime @default(now())
+
+  @@unique([userId, strapiDocumentId])
+}
+
+model EmailLog {
+  id         String      @id @default(cuid())
+  userId     String?
+  user       User?       @relation(fields: [userId], references: [id])
+  type       EmailType
+  toAddress  String
+  providerId String?
+  status     EmailStatus @default(QUEUED)
+  createdAt  DateTime    @default(now())
+
+  @@index([userId, type])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id])
+  action    String
+  entity    String
+  entityId  String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+}

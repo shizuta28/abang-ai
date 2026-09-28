@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: abang
+      POSTGRES_PASSWORD: abang
+      POSTGRES_DB: abang_commerce
+    ports:
+      - "5432:5432"
+    volumes:
+      - abang_pg:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+volumes:
+  abang_pg:

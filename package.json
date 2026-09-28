@@ -1,0 +1,25 @@
+{
+  "name": "abang-ai-hub",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "apps/api",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@abang/web",
+    "dev:api": "npm run dev --workspace=@abang/api",
+    "db:up": "docker compose -f infra/docker-compose.yml up -d",
+    "db:down": "docker compose -f infra/docker-compose.yml down",
+    "lint": "eslint apps/api packages --max-warnings 0",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspace=@abang/api",
+    "build": "npm run build --workspace=@abang/api && npm run build --workspace=@abang/web",
+    "db:validate": "npm run validate --workspace=@abang/database"
+  },
+  "devDependencies": {
+    "eslint": "^9.36.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.44.0"
+  }
+}

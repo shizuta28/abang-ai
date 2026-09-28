@@ -1,0 +1,12 @@
+node_modules
+.nuxt
+.output
+dist
+.data
+.env
+*.log
+.DS_Store
+apps/web/data/hub.json
+apps/cms/.tmp
+apps/cms/dist
+apps/cms/.strapi
